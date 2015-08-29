@@ -86,7 +86,7 @@ func main() {
 	}
 	err := run(args[0], *name, *quality)
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
