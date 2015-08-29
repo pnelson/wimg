@@ -22,6 +22,14 @@ import (
 
 var errHomeNotFound = errors.New("wimg: user home directory not found")
 
+func getUserHome() string {
+	home := os.Getenv("HOME")
+	if home == "" {
+		home = os.Getenv("USERPROFILE")
+	}
+	return home
+}
+
 func remove(r rune) bool {
 	return unicode.Is(unicode.Mn, r)
 }
@@ -39,10 +47,7 @@ func normalize(name string) (string, error) {
 }
 
 func run(src, name string, quality int) error {
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = os.Getenv("USERPROFILE")
-	}
+	home := getUserHome()
 	if home == "" {
 		return errHomeNotFound
 	}
