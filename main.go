@@ -22,6 +22,12 @@ import (
 
 var errHomeNotFound = errors.New("wimg: user home directory not found")
 
+func baseWithoutExt(src string) string {
+	ext := path.Ext(src)
+	name := path.Base(src)
+	return strings.TrimSuffix(name, ext)
+}
+
 func getUserHome() string {
 	home := os.Getenv("HOME")
 	if home == "" {
@@ -62,9 +68,7 @@ func run(src, name string, quality int) error {
 	}
 	bounds := m.Bounds()
 	if name == "" {
-		ext := path.Ext(src)
-		name = path.Base(src)
-		name = strings.TrimSuffix(name, ext)
+		name = baseWithoutExt(src)
 	}
 	name, err = normalize(name)
 	if err != nil {
