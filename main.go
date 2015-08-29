@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -26,6 +27,11 @@ func baseWithoutExt(src string) string {
 	ext := path.Ext(src)
 	name := path.Base(src)
 	return strings.TrimSuffix(name, ext)
+}
+
+func getSaveName(home, name string, rect image.Rectangle) string {
+	name = fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), name)
+	return filepath.Join(home, "img", name)
 }
 
 func getUserHome() string {
@@ -52,36 +58,39 @@ func normalize(name string) (string, error) {
 	return name, nil
 }
 
-func run(src, name string, quality int) error {
-	home := getUserHome()
-	if home == "" {
-		return errHomeNotFound
-	}
-	resp, err := http.Get(src)
+func save(home, name string, r io.Reader) error {
+	m, _, err := image.Decode(r)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	m, _, err := image.Decode(resp.Body)
-	if err != nil {
-		return err
-	}
-	bounds := m.Bounds()
-	if name == "" {
-		name = baseWithoutExt(src)
-	}
-	name, err = normalize(name)
-	if err != nil {
-		return err
-	}
-	name = fmt.Sprintf("%dx%d_%s.jpg", bounds.Dx(), bounds.Dy(), name)
-	filename := filepath.Join(home, "img", name)
+	rect := m.Bounds()
+	filename := getSaveName(home, name, rect)
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 	return jpeg.Encode(f, m, nil)
+}
+
+func run(src, name string, quality int) error {
+	home := getUserHome()
+	if home == "" {
+		return errHomeNotFound
+	}
+	if name == "" {
+		name = baseWithoutExt(src)
+	}
+	name, err := normalize(name)
+	if err != nil {
+		return err
+	}
+	resp, err := http.Get(src)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return save(home, name, resp.Body)
 }
 
 func main() {
