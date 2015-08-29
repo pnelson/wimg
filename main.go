@@ -26,16 +26,16 @@ func remove(r rune) bool {
 	return unicode.Is(unicode.Mn, r)
 }
 
-func normalize(name string) string {
+func normalize(name string) (string, error) {
 	t := transform.Chain(norm.NFD, transform.RemoveFunc(remove), norm.NFC)
 	name = strings.TrimSpace(name)
 	name, _, err := transform.String(t, name)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	name = strings.ToLower(name)
 	name = strings.Replace(name, " ", "_", -1)
-	return name
+	return name, nil
 }
 
 func run(src, name string, quality int) error {
@@ -61,7 +61,10 @@ func run(src, name string, quality int) error {
 		name = path.Base(src)
 		name = strings.TrimSuffix(name, ext)
 	}
-	name = normalize(name)
+	name, err = normalize(name)
+	if err != nil {
+		return err
+	}
 	name = fmt.Sprintf("%dx%d_%s.jpg", bounds.Dx(), bounds.Dy(), name)
 	filename := filepath.Join(home, "img", name)
 	f, err := os.Create(filename)
