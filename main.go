@@ -23,54 +23,23 @@ import (
 
 var errHomeNotFound = errors.New("wimg: user home directory not found")
 
-func baseWithoutExt(src string) string {
-	ext := path.Ext(src)
-	name := path.Base(src)
-	return strings.TrimSuffix(name, ext)
-}
-
-func getSaveName(home, name string, rect image.Rectangle) string {
-	name = fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), name)
-	return filepath.Join(home, "img", name)
-}
-
-func getUserHome() string {
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = os.Getenv("USERPROFILE")
+func main() {
+	var (
+		name    = flag.String("name", "", "name of the image")
+		quality = flag.Int("quality", 100, "jpeg quality encoding")
+	)
+	flag.Parse()
+	args := flag.Args()
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "wimg: invalid arguments")
+		flag.PrintDefaults()
+		os.Exit(1)
 	}
-	return home
-}
-
-func remove(r rune) bool {
-	return unicode.Is(unicode.Mn, r)
-}
-
-func normalize(name string) (string, error) {
-	t := transform.Chain(norm.NFD, transform.RemoveFunc(remove), norm.NFC)
-	name = strings.TrimSpace(name)
-	name, _, err := transform.String(t, name)
+	err := run(args[0], *name, *quality)
 	if err != nil {
-		return "", err
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	name = strings.ToLower(name)
-	name = strings.Replace(name, " ", "_", -1)
-	return name, nil
-}
-
-func save(home, name string, r io.Reader) error {
-	m, _, err := image.Decode(r)
-	if err != nil {
-		return err
-	}
-	rect := m.Bounds()
-	filename := getSaveName(home, name, rect)
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return jpeg.Encode(f, m, nil)
 }
 
 func run(src, name string, quality int) error {
@@ -93,21 +62,52 @@ func run(src, name string, quality int) error {
 	return save(home, name, resp.Body)
 }
 
-func main() {
-	var (
-		name    = flag.String("name", "", "name of the image")
-		quality = flag.Int("quality", 100, "jpeg quality encoding")
-	)
-	flag.Parse()
-	args := flag.Args()
-	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "wimg: invalid arguments")
-		flag.PrintDefaults()
-		os.Exit(1)
+func getUserHome() string {
+	home := os.Getenv("HOME")
+	if home == "" {
+		home = os.Getenv("USERPROFILE")
 	}
-	err := run(args[0], *name, *quality)
+	return home
+}
+
+func baseWithoutExt(src string) string {
+	ext := path.Ext(src)
+	name := path.Base(src)
+	return strings.TrimSuffix(name, ext)
+}
+
+func normalize(name string) (string, error) {
+	t := transform.Chain(norm.NFD, transform.RemoveFunc(remove), norm.NFC)
+	name = strings.TrimSpace(name)
+	name, _, err := transform.String(t, name)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return "", err
 	}
+	name = strings.ToLower(name)
+	name = strings.Replace(name, " ", "_", -1)
+	return name, nil
+}
+
+func remove(r rune) bool {
+	return unicode.Is(unicode.Mn, r)
+}
+
+func save(home, name string, r io.Reader) error {
+	m, _, err := image.Decode(r)
+	if err != nil {
+		return err
+	}
+	rect := m.Bounds()
+	filename := getSaveName(home, name, rect)
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return jpeg.Encode(f, m, nil)
+}
+
+func getSaveName(home, name string, rect image.Rectangle) string {
+	name = fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), name)
+	return filepath.Join(home, "img", name)
 }
