@@ -59,7 +59,7 @@ func run(src, name string, quality int) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return save(home, name, resp.Body)
+	return save(home, name, resp.Body, quality)
 }
 
 func getUserHome() string {
@@ -92,7 +92,7 @@ func remove(r rune) bool {
 	return unicode.Is(unicode.Mn, r)
 }
 
-func save(home, name string, r io.Reader) error {
+func save(home, name string, r io.Reader, quality int) error {
 	m, _, err := image.Decode(r)
 	if err != nil {
 		return err
@@ -104,7 +104,7 @@ func save(home, name string, r io.Reader) error {
 		return err
 	}
 	defer f.Close()
-	return jpeg.Encode(f, m, nil)
+	return jpeg.Encode(f, m, &jpeg.Options{Quality: quality})
 }
 
 func getSaveName(home, name string, rect image.Rectangle) string {
