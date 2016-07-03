@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"image"
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -20,8 +18,6 @@ import (
 	_ "image/gif"
 	_ "image/png"
 )
-
-var errHomeNotFound = errors.New("wimg: user home directory not found")
 
 func main() {
 	var (
@@ -43,10 +39,6 @@ func main() {
 }
 
 func run(src, name string, quality int) error {
-	home := getUserHome()
-	if home == "" {
-		return errHomeNotFound
-	}
 	if name == "" {
 		name = baseWithoutExt(src)
 	}
@@ -59,15 +51,7 @@ func run(src, name string, quality int) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return save(home, name, resp.Body, quality)
-}
-
-func getUserHome() string {
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = os.Getenv("USERPROFILE")
-	}
-	return home
+	return save(name, resp.Body, quality)
 }
 
 func baseWithoutExt(src string) string {
@@ -92,13 +76,13 @@ func remove(r rune) bool {
 	return unicode.Is(unicode.Mn, r)
 }
 
-func save(home, name string, r io.Reader, quality int) error {
+func save(name string, r io.Reader, quality int) error {
 	m, _, err := image.Decode(r)
 	if err != nil {
 		return err
 	}
 	rect := m.Bounds()
-	filename := getSaveName(home, name, rect)
+	filename := getSaveName(name, rect)
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -107,7 +91,6 @@ func save(home, name string, r io.Reader, quality int) error {
 	return jpeg.Encode(f, m, &jpeg.Options{Quality: quality})
 }
 
-func getSaveName(home, name string, rect image.Rectangle) string {
-	name = fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), name)
-	return filepath.Join(home, "img", name)
+func getSaveName(name string, rect image.Rectangle) string {
+	return fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), name)
 }
