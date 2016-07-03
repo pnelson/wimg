@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/gif"
 	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -15,17 +17,16 @@ import (
 
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
+)
 
-	_ "image/gif"
-	_ "image/png"
+var (
+	dir     = flag.String("dir", "", "directory to save file (default: cwd)")
+	name    = flag.String("name", "", "name of the image")
+	format  = flag.String("format", "jpg", "format to save image (default: jpg)")
+	quality = flag.Int("quality", 100, "jpeg quality encoding")
 )
 
 func main() {
-	var (
-		dir     = flag.String("dir", "", "directory to save file (default: cwd)")
-		name    = flag.String("name", "", "name of the image")
-		quality = flag.Int("quality", 100, "jpeg quality encoding")
-	)
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 1 {
@@ -33,38 +34,19 @@ func main() {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
-	o := &options{
-		dir:     *dir,
-		name:    *name,
-		quality: *quality,
-	}
-	err := run(args[0], o)
+	err := run(args[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-type options struct {
-	dir     string
-	name    string
-	quality int
-}
-
-func (o *options) clean(src string) error {
-	var err error
-	if o.name == "" {
-		o.name = baseWithoutExt(src)
-	}
-	o.name, err = normalize(o.name)
+func run(src string) error {
+	err := isSupportedFormat(*format)
 	if err != nil {
 		return err
 	}
-	return nil
-}
-
-func run(src string, o *options) error {
-	err := o.clean(src)
+	name, err := normalize(*name, src)
 	if err != nil {
 		return err
 	}
@@ -73,16 +55,23 @@ func run(src string, o *options) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return save(resp.Body, o)
+	return save(resp.Body, *dir, name, *format, *quality)
 }
 
-func baseWithoutExt(src string) string {
-	ext := path.Ext(src)
-	name := path.Base(src)
-	return strings.TrimSuffix(name, ext)
+func isSupportedFormat(format string) error {
+	var formats = []string{"gif", "jpg", "png"}
+	for _, f := range formats {
+		if f == format {
+			return nil
+		}
+	}
+	return fmt.Errorf("Format must be jpg (default), png or gif.")
 }
 
-func normalize(name string) (string, error) {
+func normalize(name, src string) (string, error) {
+	if name == "" {
+		name = baseWithoutExt(src)
+	}
 	t := transform.Chain(norm.NFD, transform.RemoveFunc(remove), norm.NFC)
 	name = strings.TrimSpace(name)
 	name, _, err := transform.String(t, name)
@@ -94,26 +83,40 @@ func normalize(name string) (string, error) {
 	return name, nil
 }
 
+func baseWithoutExt(src string) string {
+	ext := path.Ext(src)
+	name := path.Base(src)
+	return strings.TrimSuffix(name, ext)
+}
+
 func remove(r rune) bool {
 	return unicode.Is(unicode.Mn, r)
 }
 
-func save(r io.Reader, o *options) error {
+func save(r io.Reader, dir, name, format string, quality int) error {
 	m, _, err := image.Decode(r)
 	if err != nil {
 		return err
 	}
 	rect := m.Bounds()
-	filename := getSaveName(rect, o)
+	filename := getSaveName(rect, dir, name, format)
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return jpeg.Encode(f, m, &jpeg.Options{Quality: o.quality})
+	switch format {
+	case "gif":
+		err = gif.Encode(f, m, nil)
+	case "jpg":
+		err = jpeg.Encode(f, m, &jpeg.Options{Quality: quality})
+	case "png":
+		err = png.Encode(f, m)
+	}
+	return err
 }
 
-func getSaveName(rect image.Rectangle, o *options) string {
-	name := fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), o.name)
-	return filepath.Join(o.dir, name)
+func getSaveName(rect image.Rectangle, dir, name, format string) string {
+	filename := fmt.Sprintf("%dx%d_%s.%s", rect.Dx(), rect.Dy(), name, format)
+	return filepath.Join(dir, filename)
 }
