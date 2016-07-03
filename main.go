@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -21,6 +22,7 @@ import (
 
 func main() {
 	var (
+		dir     = flag.String("dir", "", "directory to save file (default: cwd)")
 		name    = flag.String("name", "", "name of the image")
 		quality = flag.Int("quality", 100, "jpeg quality encoding")
 	)
@@ -31,18 +33,38 @@ func main() {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
-	err := run(args[0], *name, *quality)
+	o := &options{
+		dir:     *dir,
+		name:    *name,
+		quality: *quality,
+	}
+	err := run(args[0], o)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(src, name string, quality int) error {
-	if name == "" {
-		name = baseWithoutExt(src)
+type options struct {
+	dir     string
+	name    string
+	quality int
+}
+
+func (o *options) clean(src string) error {
+	var err error
+	if o.name == "" {
+		o.name = baseWithoutExt(src)
 	}
-	name, err := normalize(name)
+	o.name, err = normalize(o.name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func run(src string, o *options) error {
+	err := o.clean(src)
 	if err != nil {
 		return err
 	}
@@ -51,7 +73,7 @@ func run(src, name string, quality int) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return save(name, resp.Body, quality)
+	return save(resp.Body, o)
 }
 
 func baseWithoutExt(src string) string {
@@ -76,21 +98,22 @@ func remove(r rune) bool {
 	return unicode.Is(unicode.Mn, r)
 }
 
-func save(name string, r io.Reader, quality int) error {
+func save(r io.Reader, o *options) error {
 	m, _, err := image.Decode(r)
 	if err != nil {
 		return err
 	}
 	rect := m.Bounds()
-	filename := getSaveName(name, rect)
+	filename := getSaveName(rect, o)
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return jpeg.Encode(f, m, &jpeg.Options{Quality: quality})
+	return jpeg.Encode(f, m, &jpeg.Options{Quality: o.quality})
 }
 
-func getSaveName(name string, rect image.Rectangle) string {
-	return fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), name)
+func getSaveName(rect image.Rectangle, o *options) string {
+	name := fmt.Sprintf("%dx%d_%s.jpg", rect.Dx(), rect.Dy(), o.name)
+	return filepath.Join(o.dir, name)
 }
